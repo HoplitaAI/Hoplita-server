@@ -1,0 +1,21 @@
+
+{
+	admin off
+}
+
+example.com, www.example.com {
+	encode zstd gzip
+
+	handle /health {
+		respond 404
+	}
+
+	reverse_proxy 127.0.0.1:8600 {
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+		header_up Host {host}
+	}
+}
+

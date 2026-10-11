@@ -1,0 +1,44 @@
+
+[Unit]
+Description=HOPLITA federation server (ASGI)
+Documentation=https://github.com/HoplitaAI/Hoplita-server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hoplita
+Group=hoplita
+WorkingDirectory=/opt/hoplita-fed
+EnvironmentFile=/etc/hoplita-fed.env
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_MMAP_THRESHOLD_=131072
+Environment=MALLOC_TRIM_THRESHOLD_=131072
+
+ExecStartPre=/opt/hoplita-fed/venv/bin/python manage.py migrate --noinput
+ExecStartPre=/opt/hoplita-fed/venv/bin/python manage.py collectstatic --noinput
+ExecStartPre=/opt/hoplita-fed/venv/bin/python manage.py createcachetable
+ExecStartPre=/opt/hoplita-fed/venv/bin/python manage.py boot_sweep
+
+ExecStart=/opt/hoplita-fed/venv/bin/gunicorn hoplitafed.asgi:application \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 127.0.0.1:8600 \
+    --timeout 120 --graceful-timeout 30 --keep-alive 65 \
+    --max-requests 2000 --max-requests-jitter 200 \
+    --access-logfile - --error-logfile - --capture-output
+
+
+LimitNOFILE=65535
+
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=40
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

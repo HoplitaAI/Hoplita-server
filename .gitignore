@@ -1,0 +1,17 @@
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+
+*.env
+!*.env.example
+deploy/hoplita-fed.env
+
+*.key
+*.pem
+
+__pycache__/
+*.py[cod]
+
+staticfiles/
+media/
+*.log
