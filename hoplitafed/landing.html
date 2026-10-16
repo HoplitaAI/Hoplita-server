@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HOPLITA — your AI agent, your machine, your people</title>
+<meta name="description" content="A personal AI agent that lives on your machine, works with your models, keeps your data encrypted, and federates with the people you choose. Free software, GPL-3.0.">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="HOPLITA">
+<meta property="og:description" content="A personal AI agent that lives on your machine, works with your models, keeps your data encrypted, and federates with the people you choose.">
+<meta property="og:image" content="/static/landing/shots/chat.webp">
+<link rel="icon" href="/static/landing/logo.png">
+<link rel="stylesheet" href="/static/landing/landing.css">
+<script type="importmap">{"imports": {"three": "/static/landing/three.module.min.js"}}</script>
+<script type="module" src="/static/landing/landing.js"></script>
+</head>
+<body>
+
+<header class="hero" id="top">
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <nav class="bar">
+    <a class="brand" href="#top"><img src="/static/landing/logo.png" alt="" width="28" height="28"> HOPLITA</a>
+    <div class="links">
+      <a href="#tour">Tour</a>
+      <a href="#agent">Agent</a>
+      <a href="#code">Code</a>
+      <a href="#federation">Federation</a>
+      <a href="#server">Server</a>
+      <a class="gh" href="https://github.com/HoplitaAI/Hoplita">GitHub</a>
+    </div>
+  </nav>
+  <div class="hero-copy">
+    <p class="eyebrow">Free software · GPL-3.0 · Linux, macOS, Windows</p>
+    <h1>HOPLITA</h1>
+    <p class="lead">A personal AI agent that lives on your machine, works with
+      <em>your</em> models, keeps your data encrypted, and federates with the
+      people you choose.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/HoplitaAI/Hoplita">Get HOPLITA</a>
+      <a class="btn" href="https://github.com/HoplitaAI/Hoplita/blob/main/docs/INSTALL.md">Install guide</a>
+      <a class="btn ghost" href="#tour">Take the tour ↓</a>
+    </div>
+    <p class="fine">Runs against any OpenAI-compatible server — llama.cpp, Ollama, vLLM, LM Studio or a cloud API.</p>
+  </div>
+  <p class="legend" aria-hidden="true"><span class="dot node"></span> your machines and your contacts' <span class="dot relay"></span> a relay that cannot read what it carries</p>
+</header>
+
+<main>
+
+<section class="tour" id="tour">
+  <div class="head">
+    <h2>A tour of the real thing</h2>
+    <p>Every picture is the application itself, running against real models and a
+      real federation server. Drag, scroll the strip, or pick a chapter.</p>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="stage" id="stage">
+    <canvas id="gallery" aria-label="Screenshot gallery"></canvas>
+    <button class="nav prev" id="prev" aria-label="Previous">‹</button>
+    <button class="nav next" id="next" aria-label="Next">›</button>
+  </div>
+  <div class="caption" id="caption" aria-live="polite"><strong></strong><span></span></div>
+</section>
+
+<section class="feature" id="agent">
+  <div class="text">
+    <p class="kicker">Chat that does the work</p>
+    <h2>More than two hundred tools, and a bar for «done»</h2>
+    <ul>
+      <li><b>Agentic by default:</b> web search, scraping, a browser it drives, files,
+        shell, PDF and images, Word, Excel and PowerPoint, notes, tasks, calendar,
+        and charts on a live canvas.</li>
+      <li><b>You watch it think:</b> the model keeps a live intent list; a stall is
+        caught by progress and time, and answered — with a question, a council,
+        another model, or an honest close.</li>
+      <li><b>A reviewer</b> checks the answer before you see it.
+        <code>/verify &lt;command&gt;</code> keeps the turn going until the command passes.</li>
+      <li><b>Tabs, each its own world:</b> conversation, model, reviewer, firewall and project.</li>
+    </ul>
+  </div>
+  <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/chat.webp" alt="A chat turn: the agent read the trip notes, drew the budget and answered" width="1600" height="1000"></figure>
+</section>
+
+<section class="feature flip">
+  <div class="text">
+    <p class="kicker">Several models, one assistant</p>
+    <h2>A pool of models, and a router that picks</h2>
+    <ul>
+      <li><b>Your models, in plain words:</b> each one with a profile — heavy coding,
+        vision, quick chat. One is the base; every job can run on its own.</li>
+      <li><b>The router</b> reads each request and sends the turn to the model that
+        fits, and says where it went. <code>/model</code> pins one by hand.</li>
+      <li><b>The Council:</b> several models deliberate on any matter — answer,
+        examine, reformulate — and vote.</li>
+      <li><b>Orchestration:</b> a planner splits a task into sub-agents, each on its
+        own model, and runs them after you approve the plan.</li>
+    </ul>
+  </div>
+  <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/models.webp" alt="Configuration: the models and who uses which" width="1100" height="732"></figure>
+</section>
+
+<section class="feature wide" id="code">
+  <div class="text">
+    <p class="kicker">Code</p>
+    <h2>A coding environment, not a chat about files</h2>
+    <p>Open a repository and the agent works in it: it reads, patches, runs your
+      checks and commits on a branch first. You review every hunk — keep it or
+      throw it away — with history, symbols from the language server, search and
+      git checkpoints to go back to.</p>
+  </div>
+  <div class="stack">
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/code-diff.webp" alt="The change the agent made, hunk by hunk, each one discardable" width="1600" height="908"></figure>
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/code-editor.webp" alt="The editor with the file the agent changed" width="1600" height="908"></figure>
+  </div>
+</section>
+
+<section class="feature wide fed" id="federation">
+  <div class="text">
+    <p class="kicker">Federation</p>
+    <h2>Share with people, not with a server</h2>
+    <p>Add a contact by handle. Share a notes folder, a task project, a code
+      repository — or open a session with a contact's agent and ask it what only
+      it knows, within the permissions they gave you. Everything is sealed on
+      your machine to the recipient's key before it leaves. Contacts and shares
+      count because <em>you</em> signed them: a server that lies about who is
+      whose contact is caught, not believed.</p>
+  </div>
+  <div class="grid4">
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/contacts.webp" alt="Contacts, online, with the identity fingerprint" width="1600" height="1000"><figcaption>Contacts and presence</figcaption></figure>
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/shared-folder.webp" alt="A shared notes folder" width="1600" height="1000"><figcaption>A shared folder — a contact's note arrived, encrypted</figcaption></figure>
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/remote.webp" alt="A remote session: the contact's agent answers with its own tools" width="1600" height="1000"><figcaption>A session with a contact's agent, using its own tools</figcaption></figure>
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/activity.webp" alt="Activity: what contacts did to what you share" width="1600" height="908"><figcaption>What they did to what you share</figcaption></figure>
+  </div>
+</section>
+
+<section class="feature">
+  <div class="text">
+    <p class="kicker">Organized, and on schedule</p>
+    <h2>Projects you can see, jobs that think</h2>
+    <ul>
+      <li><b>Projects</b> as lists, boxes with their progress, a dependency graph
+        and a timeline — and the model sees the same graph you do.</li>
+      <li><b>Cron jobs</b> run as full agentic turns: at a time, every so often, or
+        at every start. Dislike a result and the supervisor rewrites the job.</li>
+      <li><b>Notes, tasks and appointments</b> the agent reads and writes.</li>
+    </ul>
+  </div>
+  <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/boxes.webp" alt="A project as boxes with progress" width="1600" height="908"></figure>
+</section>
+
+<section class="feature flip">
+  <div class="text">
+    <p class="kicker">Yours, and in check</p>
+    <h2>Encrypted at rest, fenced at every door</h2>
+    <ul>
+      <li><b>One SQLCipher database</b> for notes, tasks, credentials, memory and
+        settings, encrypted with your master password.</li>
+      <li><b>A credential vault</b> with TOTP: the agent logs in without the
+        password ever reaching the prompt.</li>
+      <li><b>A tool firewall,</b> global and per tab, enforced on every path a call
+        can take.</li>
+      <li><b>A memory that curates itself</b> — facts, lessons and experience you
+        can read, edit and wipe.</li>
+    </ul>
+  </div>
+  <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/tools.webp" alt="The tool firewall" width="1600" height="908"></figure>
+</section>
+
+<section class="server" id="server">
+  <div class="text">
+    <p class="kicker">Hoplita server</p>
+    <h2>Run your own federation</h2>
+    <p>The server is a relay that <b>cannot read what it carries</b>: accounts,
+      public keys, presence and mailboxes of sealed envelopes, pushed over a
+      WebSocket the moment they arrive and forgotten once delivered. Losing it is
+      an outage, not a leak.</p>
+    <ul class="ticks">
+      <li>Login by proof of private key — the server seals a nonce only the key holder can open</li>
+      <li>Invite-only sign-up by default, quotas per group, an admin for the operator</li>
+      <li>One script deploys it with PostgreSQL, Caddy and TLS, and an acceptance gate that checks it</li>
+    </ul>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/HoplitaAI/Hoplita-server">Hoplita-server on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<section class="start">
+  <h2>Start in three steps</h2>
+  <ol>
+    <li><b>Install</b> — Python 3.11+ and git, then <code>python3 install.py</code>.
+      <a href="https://github.com/HoplitaAI/Hoplita/blob/main/docs/INSTALL.md">Linux, macOS, Windows</a></li>
+    <li><b>Give it a model</b> with tool calling, local or cloud, and a web search key.
+      <a href="https://github.com/HoplitaAI/Hoplita/blob/main/docs/FIRST-STEPS.md">First steps</a></li>
+    <li><b>Talk to it.</b> <a href="https://github.com/HoplitaAI/Hoplita/blob/main/docs/COMMANDS.md">Every command</a></li>
+  </ol>
+</section>
+
+</main>
+
+<footer>
+  <img src="/static/landing/logo.png" alt="" width="36" height="36">
+  <p>HOPLITA is free software under the GNU GPL v3.
+    <a href="https://github.com/HoplitaAI/Hoplita">Hoplita</a> ·
+    <a href="https://github.com/HoplitaAI/Hoplita-server">Hoplita-server</a></p>
+  <p class="fine">3D by <a href="https://threejs.org">three.js</a> (MIT), served from this server. No trackers, no cookies, no third-party requests.</p>
+</footer>
+
+<div class="lightbox" id="lightbox" hidden><img alt=""><button aria-label="Close">×</button></div>
+</body>
+</html>

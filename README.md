@@ -524,9 +524,13 @@ seconds rather than blocking everyone.
 
 ### The front page
 
-`/` is a small static page with the logo, served with `X-Robots-Tag: noindex`
-next to a `robots.txt` that disallows everything. Its wording is `TEXT` in
-`hoplitafed/views_home.py`.
+`/` is the HOPLITA landing page: `hoplitafed/landing.html`, with its
+stylesheet, script, three.js and screenshots under
+`federation/static/landing/`, served by WhiteNoise after `collectstatic` (the
+unit runs it on every start). It sets no cookie and makes no request off the
+host. `robots.txt` keeps `/api/`, `/ws/` and `/admin/` out of indexes. To
+replace the page, edit those files; if `landing.html` is missing, `/` answers a
+one-line page with the logo.
 
 ---
 
