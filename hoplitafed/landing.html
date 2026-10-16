@@ -99,6 +99,20 @@
   <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/models.webp" alt="Configuration: the models and who uses which" width="1100" height="732"></figure>
 </section>
 
+<section class="feature wide" id="agents">
+  <div class="text">
+    <p class="kicker">Agents at work</p>
+    <h2>A plan you can watch run</h2>
+    <p>Ask for something big and the planner splits it into sub-agents, laid out
+      by stage: the ones that can run together, run together; the ones that need
+      their results wait for them. You approve the plan first — edit a goal,
+      drop a card, move one to another model or to a contact's machine — and
+      then watch every card's light, its own intent list and the data flowing
+      along the arrows.</p>
+  </div>
+  <figure class="shot live"><img loading="lazy" src="/static/landing/shots/agents-live.webp" alt="Five sub-agents in three stages: three write in parallel, one combines, one adds the tasks" width="1155" height="450"><figcaption>Recorded live: three sub-agents writing in parallel, then the stage that waits for them</figcaption></figure>
+</section>
+
 <section class="feature wide" id="code">
   <div class="text">
     <p class="kicker">Code</p>
@@ -108,9 +122,26 @@
       throw it away — with history, symbols from the language server, search and
       git checkpoints to go back to.</p>
   </div>
+  <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/code-switch.webp" alt="The code mode button, top right of the chat" width="1600" height="1000"><figcaption>Where it lives: the <code>&lt;/&gt;</code> button at the top right of any chat tab turns it into the code environment</figcaption></figure>
   <div class="stack">
     <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/code-diff.webp" alt="The change the agent made, hunk by hunk, each one discardable" width="1600" height="908"></figure>
     <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/code-editor.webp" alt="The editor with the file the agent changed" width="1600" height="908"></figure>
+  </div>
+</section>
+
+<section class="feature wide" id="board">
+  <div class="text">
+    <p class="kicker">Whiteboard</p>
+    <h2>A whiteboard that explains the code</h2>
+    <p>One click and a model reads the repository and draws it: how it works, what
+      the last commit changed, or what is on your desk right now — as a story in
+      sections, with flow diagrams whose every node opens the exact lines it talks
+      about, and the real diff next to the words. It follows the code: when the
+      branch moves on, the board says so and brings itself up to date.</p>
+  </div>
+  <div class="stack">
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/whiteboard.webp" alt="How unhide detects a hidden process, drawn as a flow" width="1600" height="1000"><figcaption>How it works — the open-source rootkit hunter unhide, drawn as a flow</figcaption></figure>
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/whiteboard-commit.webp" alt="The last commit of unhide explained next to its diff" width="1600" height="1000"><figcaption>The last commit — the fix, in words and in its diff</figcaption></figure>
   </div>
 </section>
 
@@ -128,8 +159,26 @@
   <div class="grid4">
     <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/contacts.webp" alt="Contacts, online, with the identity fingerprint" width="1600" height="1000"><figcaption>Contacts and presence</figcaption></figure>
     <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/shared-folder.webp" alt="A shared notes folder" width="1600" height="1000"><figcaption>A shared folder — a contact's note arrived, encrypted</figcaption></figure>
-    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/remote.webp" alt="A remote session: the contact's agent answers with its own tools" width="1600" height="1000"><figcaption>A session with a contact's agent, using its own tools</figcaption></figure>
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/agents-fed.webp" alt="A plan where one sub-agent runs on a contact's machine" width="1600" height="1000"><figcaption>A plan with one sub-agent handed to a contact's machine</figcaption></figure>
     <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/activity.webp" alt="Activity: what contacts did to what you share" width="1600" height="908"><figcaption>What they did to what you share</figcaption></figure>
+  </div>
+</section>
+
+<section class="feature wide" id="sessions">
+  <div class="text">
+    <p class="kicker">Remote sessions</p>
+    <h2>Talk to a contact's agent</h2>
+    <p>Right-click a contact and open a session: a green tab appears, and on the
+      other side of it is <em>their</em> agent, on their machine, with their model,
+      their calendar, their notes. It answers what only it knows, within the
+      permission they gave you — straight away, after they review your request,
+      or not at all — and every step of its turn comes back to your tab as it
+      happens. The same door works the other way round: a
+      contact's question to your agent opens a red tab on your screen.</p>
+  </div>
+  <div class="stack">
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/remote-open.webp" alt="The contact menu with Open session" width="1600" height="1000"><figcaption>1 · Contacts → right-click → Open session</figcaption></figure>
+    <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/remote-tab.webp" alt="The green tab where the contact's agent answers" width="1600" height="1000"><figcaption>2 · Bruno's agent answers from his own data, and puts the dinner on his calendar</figcaption></figure>
   </div>
 </section>
 
@@ -139,13 +188,14 @@
     <h2>Projects you can see, jobs that think</h2>
     <ul>
       <li><b>Projects</b> as lists, boxes with their progress, a dependency graph
-        and a timeline — and the model sees the same graph you do.</li>
+        and a timeline — and the model sees the same graph you do. A task whose
+        dependencies are not done yet says so on its box: ⛔ 1/3.</li>
       <li><b>Cron jobs</b> run as full agentic turns: at a time, every so often, or
         at every start. Dislike a result and the supervisor rewrites the job.</li>
       <li><b>Notes, tasks and appointments</b> the agent reads and writes.</li>
     </ul>
   </div>
-  <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/boxes.webp" alt="A project as boxes with progress" width="1600" height="908"></figure>
+  <figure class="shot tilt"><img loading="lazy" src="/static/landing/shots/deps.webp" alt="A project's dependency graph: tasks as boxes joined by arrows" width="1600" height="1000"></figure>
 </section>
 
 <section class="feature flip">
