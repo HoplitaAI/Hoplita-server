@@ -1,4 +1,6 @@
+import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from asgiref.sync import sync_to_async
@@ -6,8 +8,9 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.db import close_old_connections
 from rest_framework.authtoken.models import Token
 
-from . import services
-from .push import notify_user_async, notify_presence_async, _group
+from . import protocol, services
+from .push import (notify_user_async, notify_presence_async, reset_live_async,
+                   _group)
 
 
 def _pool_size():
@@ -66,6 +69,11 @@ class FedConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         self.identity = None
         self._token_key = ""
+        self._proto = 1
+        self._caps = frozenset()
+        self._live_peers = {}
+        self._live_tokens = float(protocol.LIVE_BURST)
+        self._live_at = time.monotonic()
         await self.accept()
 
     async def disconnect(self, code):
@@ -115,6 +123,10 @@ class FedConsumer(AsyncJsonWebsocketConsumer):
                                   "data": {"pong": True}})
             return
 
+        if op == "live":
+            await self._live(content)
+            return
+
         fn = services.WS_OPS.get(op)
         if fn is None:
             await self.send_json({"req_id": req_id, "ok": False,
@@ -149,7 +161,10 @@ class FedConsumer(AsyncJsonWebsocketConsumer):
             await notify_user_async(payload.pop("recipient_id"),
                                     "envelope.new", payload.pop("notice"))
         elif op in ("add_contact", "accept_contact", "remove_contact"):
+            self._live_peers = {}
             pid = payload.pop("peer_id", None)
+            if op == "remove_contact":
+                await reset_live_async(me.id, pid)
             if pid:
                 await notify_user_async(
                     pid, "contact.update",
@@ -210,6 +225,91 @@ class FedConsumer(AsyncJsonWebsocketConsumer):
             return fn(identity, params)
         return run
 
+    async def _live(self, content):
+        req_id = content.get("req_id")
+        params = content.get("params") or {}
+        to = str(params.get("to") or "").strip().lower()
+        data = params.get("data")
+
+        async def refuse(error, status, **extra):
+            if req_id:
+                await self.send_json(dict({"req_id": req_id, "ok": False,
+                                           "error": error, "status": status},
+                                          **extra))
+            else:
+                await self.send_json({"event": "live.refused",
+                                      "data": dict({"to": to, "error": error},
+                                                   **extra)})
+
+        if "live" not in self._caps:
+            await refuse("live_not_declared", 400, message=(
+                "declare the capability: send caps=['live'] with auth"))
+            return
+        if not to or not isinstance(data, dict):
+            await refuse("bad_live", 400, message="params.to and params.data")
+            return
+        try:
+            size = len(json.dumps(data, separators=(",", ":")))
+        except (TypeError, ValueError):
+            await refuse("bad_live", 400, message="data must be JSON")
+            return
+        if size > protocol.LIVE_MAX_BYTES:
+            await refuse("live_too_big", 413, size=size,
+                         limit=protocol.LIVE_MAX_BYTES)
+            return
+        now = time.monotonic()
+        self._live_tokens = min(float(protocol.LIVE_BURST), self._live_tokens
+                                + (now - self._live_at) * protocol.LIVE_RATE_PER_S)
+        self._live_at = now
+        if self._live_tokens < 1:
+            await refuse("live_throttled", 429,
+                         retry_after=1.0 / protocol.LIVE_RATE_PER_S)
+            return
+        self._live_tokens -= 1
+
+        hit = self._live_peers.get(to)
+        if hit is None or hit[1] < now:
+            try:
+                identity, peer_id, _s = await self._db_as(
+                    self._token_key,
+                    lambda i, _p: (services.live_peer(i, to), 200), None)
+            except Exception:
+                await refuse("internal", 500)
+                return
+            if identity is None:
+                await self._revoked(req_id)
+                return
+            self.identity = identity
+            if peer_id is None:
+                self._live_peers.pop(to, None)
+                await refuse("not_a_contact", 403)
+                return
+            hit = (peer_id, now + protocol.LIVE_PEER_TTL_S)
+            self._live_peers[to] = hit
+        try:
+            await self.channel_layer.group_send(_group(hit[0]), {
+                "type": "fed.live", "from": self.identity.handle,
+                "origin": self.channel_name, "data": data})
+        except Exception:
+            await refuse("bus_unavailable", 503)
+            return
+        if req_id:
+            await self.send_json({"req_id": req_id, "ok": True,
+                                  "data": {"sent": True}})
+
+    async def fed_live_reset(self, message):
+        self._live_peers = {}
+
+    async def fed_live(self, message):
+        if "live" not in self._caps or message.get("origin") == self.channel_name:
+            return
+        try:
+            await self.send_json({"event": "live",
+                                  "data": {"from": message.get("from"),
+                                           "data": message.get("data")}})
+        except Exception:
+            pass
+
     async def _revoked(self, req_id):
         await self.send_json({"req_id": req_id, "ok": False,
                               "error": "Invalid token", "status": 401})
@@ -217,6 +317,16 @@ class FedConsumer(AsyncJsonWebsocketConsumer):
 
     async def _handle_auth(self, content):
         req_id = content.get("req_id")
+        self._proto = protocol.client_proto(content.get("proto"))
+        caps = content.get("caps")
+        self._caps = frozenset(c for c in (caps if isinstance(caps, list) else [])
+                               if isinstance(c, str) and c in protocol.CAPS)
+        refusal = protocol.too_old(self._proto)
+        if refusal is not None:
+            await self.send_json(dict(refusal, req_id=req_id, ok=False,
+                                      status=426))
+            await self.close(code=4426)
+            return
         key = (content.get("token") or "").strip()
         identity = await self._db(self._identity_for, key)
         if identity is None:
@@ -231,10 +341,13 @@ class FedConsumer(AsyncJsonWebsocketConsumer):
         contact_ids = await self._db(self._set_presence, self.identity, True)
         await notify_presence_async(self.identity, True, contact_ids)
         await self.send_json({"req_id": req_id, "ok": True,
-                              "data": {"handle": self.identity.handle,
-                                       "authenticated": True}})
+                              "data": dict(protocol.hello(),
+                                           handle=self.identity.handle,
+                                           authenticated=True)})
 
     async def fed_event(self, message):
+        if message.get("event") == "contact.update":
+            self._live_peers = {}
         try:
             await self.send_json({"event": message["event"],
                                   "data": message["data"]})

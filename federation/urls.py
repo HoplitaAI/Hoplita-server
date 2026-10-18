@@ -37,6 +37,7 @@ urlpatterns = [
     path("inbox/ack", views.ack_envelopes),
     path("sync/pull", views.sync_pull),
     path("sync/push", views.sync_push),
+    path("protocol", views.protocol_info),
     path("motd", views.motd),
     path("notices", views.notices),
     path("quota", views.quota),

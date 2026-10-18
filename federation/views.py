@@ -40,7 +40,7 @@ def _send_pin(to_email, handle, pin):
 from .models import (Identity, EmailPin, Contact, Envelope,
                      SpawnToken, LoginChallenge, QuotaTier)
 from . import services
-from .push import notify_user
+from .push import notify_user, reset_live
 
 
 
@@ -326,6 +326,7 @@ def remove_contact(request):
         notify_user(payload["peer_id"], "contact.update",
                     {"from": request.user.identity.handle,
                      "status": "removed"})
+        reset_live(request.user.identity.id, payload["peer_id"])
     payload.pop("peer_id", None)
     return Response(payload, status=status)
 
@@ -594,6 +595,13 @@ def sync_pull(request):
 def sync_push(request):
     payload, status = services.svc_sync_push(request.user.identity, request.data)
     return Response(payload, status=status)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def protocol_info(request):
+    from . import protocol
+    return Response(protocol.hello(), status=200)
 
 
 @api_view(["GET"])

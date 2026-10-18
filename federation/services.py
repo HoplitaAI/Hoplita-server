@@ -300,6 +300,21 @@ def svc_send_envelope(me, params):
             "notice": envelope_to_notice(env)}, 201
 
 
+def live_peer(me, handle):
+    handle = (handle or "").strip().lower()
+    if not handle:
+        return None
+    if handle == me.handle:
+        return me.id
+    peer = Identity.objects.filter(handle=handle).only("id").first()
+    if peer is None:
+        return None
+    if not Contact.objects.filter(owner=me, peer=peer,
+                                  status=Contact.ACCEPTED).exists():
+        return None
+    return peer.id
+
+
 def envelope_to_dict(env):
     return {
         "id": env.id,

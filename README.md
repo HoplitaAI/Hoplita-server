@@ -31,6 +31,17 @@ and one sealed snapshot per user: losing it is an outage, not a leak.
   requests) go into the recipient's mailbox and are pushed over the WebSocket
   the moment they arrive; the client acknowledges what it has stored and the
   server forgets it. Undelivered mail expires after a TTL (30 days by default).
+- **The live lane.** Small messages from one socket straight to the open
+  sockets of a contact, through the bus, with nothing stored: a remote
+  session's progress reaches the other screen in milliseconds instead of
+  waiting in the mailbox behind everything else. What must arrive (the reply,
+  a tool to run, a stop) still goes by the mailbox too.
+- **A versioned protocol.** Clients and server say which protocol they speak
+  and what they can do (`GET /api/fed/protocol`, the socket's auth, the
+  `X-Hoplita-Proto` header). New features are used only when both ends have
+  them, so old and new clients share one server; the operator can turn away
+  clients too old to work with `HOPLITA_MIN_PROTO`, and they are told to
+  update.
 - **Shared and public folders.** Share records with a signed grant per member,
   read-only shares, and public folders anyone can subscribe to.
 - **Own-machine sync.** One sealed snapshot per user, versioned, so several
@@ -102,6 +113,8 @@ count is read from `WEB_CONCURRENCY` (or `HOPLITA_WORKERS`, `GUNICORN_WORKERS`).
 | HTTP requests served at once; the rest wait on the event loop | `HOPLITA_HTTP_CONCURRENCY` | 12 |
 | Seconds a request may wait before a `503` with `Retry-After` | `HOPLITA_HTTP_QUEUE_S` | 30 |
 | Threads (and database connections) for WebSocket operations | `HOPLITA_WS_POOL` | 8 |
+| Live-lane messages per socket: size / rate / burst (no database, not counted in requests per minute) | — | 6000 B / 50 per s / 200 |
+| Oldest client protocol served | `HOPLITA_MIN_PROTO` | 1 |
 | Bus connections (one `LISTEN`, one `NOTIFY`) | — | 2 |
 | Mailbox page: envelopes / body bytes per request (HOPLITA clients ask for pages) | `HOPLITA_INBOX_PAGE_MAX` / `HOPLITA_INBOX_PAGE_BYTES` | 200 / 4 MB |
 | Mailbox page for a client that does not ask for pages | `HOPLITA_INBOX_LEGACY_PAGE_BYTES` | 64 MB |

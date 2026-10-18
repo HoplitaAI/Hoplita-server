@@ -37,6 +37,16 @@ def notify_user(identity_id, event, data):
     return async_to_sync(notify_user_async)(identity_id, event, data)
 
 
+async def reset_live_async(*identity_ids):
+    for iid in identity_ids:
+        if iid:
+            await _push_async(_group(iid), {"type": "fed.live_reset"})
+
+
+def reset_live(*identity_ids):
+    return async_to_sync(reset_live_async)(*identity_ids)
+
+
 def push_notice(recipient=None, kind="system", level="info", text="",
                 code="", params=None, expires_at=None):
     from .models import ServerNotice

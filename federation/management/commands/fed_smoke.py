@@ -8,6 +8,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 
+from federation import protocol
 from federation.models import Identity, Contact
 
 try:
@@ -50,7 +51,9 @@ class Command(BaseCommand):
 
     def _connect(self, base, token, timeout=10):
         ws = websocket.create_connection(self._ws_url(base), timeout=timeout)
-        ws.send(json.dumps({"op": "auth", "token": token, "req_id": "smoke"}))
+        ws.send(json.dumps({"op": "auth", "token": token, "req_id": "smoke",
+                            "proto": protocol.PROTO,
+                            "caps": list(protocol.CAPS)}))
         first = json.loads(ws.recv())
         if not first.get("ok"):
             raise CommandError(f"auth rejected: {first}")
@@ -111,6 +114,14 @@ class Command(BaseCommand):
         except Exception as _e:
             self.stdout.write(self.style.ERROR(
                 f"    admin login  : does not answer ({_e})"))
+        try:
+            _pr = requests.get(f"{base}/api/fed/protocol", timeout=5).json()
+            self.stdout.write(f"    protocol      : {_pr.get('proto')} "
+                              f"(serves from {_pr.get('min_proto')}; "
+                              f"caps {', '.join(_pr.get('caps') or []) or 'none'})")
+        except Exception as _e:
+            self.stdout.write(self.style.ERROR(
+                f"    protocol      : /api/fed/protocol does not answer ({_e})"))
         self.stdout.write(f"    channel layer : {info.get('channel_layer')}")
         self.stdout.write(f"    cache         : {info.get('cache', {}).get('backend')}")
         self.stdout.write(f"    database      : {info.get('db', {}).get('engine')}")
@@ -126,6 +137,7 @@ class Command(BaseCommand):
         Contact.objects.create(owner=b_id, peer=a_id, status="accepted")
         rounds = max(1, o["rounds"])
         got = 0
+        live_got = 0
         try:
             ws_b = self._connect(base, b_tok)
             for i in range(rounds):
@@ -133,6 +145,11 @@ class Command(BaseCommand):
                 ev = self._drain_for(ws_b, "presence", 6)
                 if ev and ev.get("data", {}).get("handle") == a_id.handle:
                     got += 1
+                ws_a.send(json.dumps({"op": "live", "params": {
+                    "to": b_id.handle, "data": {"smoke": i}}}))
+                lv = self._drain_for(ws_b, "live", 6)
+                if lv and (lv.get("data") or {}).get("data") == {"smoke": i}:
+                    live_got += 1
                 try:
                     ws_a.close()
                 except Exception:
@@ -149,6 +166,14 @@ class Command(BaseCommand):
         good = got == rounds
         self.stdout.write(f"\n 2. cross-worker presence: {got}/{rounds} received "
                           f"{OK if good else NO}")
+        live_good = live_got == rounds
+        self.stdout.write(f"    cross-worker live lane: {live_got}/{rounds} received "
+                          f"{OK if live_good else NO}")
+        if not live_good:
+            failures.append(
+                f"only {live_got} of {rounds} live messages arrived: the lane "
+                "rides the channel layer, so this is the bus, or a server "
+                "older than protocol 2 behind this URL.")
         if not good:
             failures.append(
                 f"only {got} of {rounds} presence events arrived. With {n} workers "
@@ -161,7 +186,7 @@ class Command(BaseCommand):
 
         self.stdout.write("\n 3. throttle shared across workers...")
         c_id, c_tok = self._mk_identity("c")
-        hdr = {"Authorization": f"Token {c_tok}"}
+        hdr = {"Authorization": f"Token {c_tok}", "X-Hoplita-Proto": str(protocol.PROTO)}
         codes = []
         try:
             for _ in range(120):
