@@ -257,7 +257,6 @@ else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = _env("HOPLITA_EMAIL_FROM", "no-reply@localhost")
 
-FED_OPEN_REGISTRATION = _env_bool("HOPLITA_OPEN_REGISTRATION", False)
 
 FED_EXPOSE_DEV_PIN = _env_bool("HOPLITA_EXPOSE_DEV_PIN", DEBUG)
 

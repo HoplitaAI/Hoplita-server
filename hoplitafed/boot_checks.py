@@ -77,9 +77,24 @@ def check(strict: bool = True) -> list[str]:
             problems.append("HOPLITA_ALLOWED_HOSTS is missing (e.g. example.com).")
         elif "*" in settings.ALLOWED_HOSTS:
             warnings.append("ALLOWED_HOSTS=* accepts any Host header: set your domain.")
-        if getattr(settings, "FED_OPEN_REGISTRATION", False):
-            warnings.append("OPEN registration in production: anyone can create "
-                            "identities (HOPLITA_OPEN_REGISTRATION=1).")
+        try:
+            from federation.models import RegistrationPolicy
+            from django.db import connection
+            mode = RegistrationPolicy.current().mode
+            connection.close()
+            if mode == RegistrationPolicy.OPEN:
+                warnings.append("OPEN registration in production: anyone can "
+                                "create identities (sign-up policy, admin).")
+        except Exception:
+            pass
+
+    stale = [v for v in ("HOPLITA_INVITE_CODES", "HOPLITA_OPEN_REGISTRATION")
+             if os.environ.get(v, "").strip()]
+    if stale:
+        warnings.append(f"{', '.join(stale)} no longer does anything: sign-up "
+                        "and invitation codes are set in the admin (what was "
+                        "here was brought over by migration 0020). Remove the "
+                        "line(s) from the env file.")
 
     try:
         from django.db.migrations.autodetector import MigrationAutodetector

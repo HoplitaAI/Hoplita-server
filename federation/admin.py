@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from .models import (Identity, EmailPin, Contact, Envelope, SpawnToken,
                      SyncSnapshot, ServerNotice, QuotaTier, PublicFolder,
-                     BannedEmail)
+                     BannedEmail, RegistrationPolicy, InviteCode)
 
 _TESTY_RE = re.compile(r"test|prueba|demo|tmp|borrar", re.I)
 
@@ -36,6 +36,63 @@ class BannedEmailAdmin(UnfoldModelAdmin):
             n += User.objects.filter(email__iexact=ban.email,
                                      is_active=True).update(is_active=False)
         self.message_user(request, f"{n} account(s) deactivated.")
+
+
+@admin.register(RegistrationPolicy)
+class RegistrationPolicyAdmin(UnfoldModelAdmin):
+    fields = ("mode", "codes_view", "updated_at")
+    readonly_fields = ("codes_view", "updated_at")
+
+    def changelist_view(self, request, extra_context=None):
+        from django.shortcuts import redirect
+        from django.urls import reverse
+        return redirect(reverse("admin:federation_registrationpolicy_change",
+                                args=[RegistrationPolicy.current().pk]))
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description="Invitation codes")
+    def codes_view(self, obj):
+        from django.urls import reverse
+        n = InviteCode.usable().count()
+        warn = (" — with the mode on invitation, NOBODY can sign up until "
+                "there is one" if n == 0 and obj.mode == obj.INVITE else "")
+        return format_html('{} usable{} · <a href="{}">manage the codes</a>',
+                           n, warn,
+                           reverse("admin:federation_invitecode_changelist"))
+
+
+@admin.register(InviteCode)
+class InviteCodeAdmin(UnfoldModelAdmin):
+    list_display = ("code", "note", "used", "expires_at", "status",
+                    "who", "active")
+    list_editable = ("active",)
+    list_filter = ("active",)
+    search_fields = ("code", "note", "identities__handle")
+    fields = ("code", "note", "max_uses", "uses", "expires_at", "active",
+              "who", "created_at")
+    readonly_fields = ("uses", "who", "created_at")
+
+    @admin.display(description="Used")
+    def used(self, obj):
+        return f"{obj.uses} / {obj.max_uses or '∞'}"
+
+    @admin.display(description="State")
+    def status(self, obj):
+        return {"usable": "🟢 usable", "used up": "⚪ used up",
+                "expired": "⚪ expired", "withdrawn": "⛔ withdrawn"}[obj.state]
+
+    @admin.display(description="Signed up with it")
+    def who(self, obj):
+        if obj.pk is None:
+            return "—"
+        handles = list(obj.identities.values_list("handle", flat=True)[:20])
+        more = obj.identities.count() - len(handles)
+        return ", ".join(handles) + (f" (+{more})" if more > 0 else "") or "—"
 
 
 @admin.register(PublicFolder)
@@ -160,7 +217,7 @@ class IdentityAdmin(UnfoldModelAdmin):
     form = QuotaOverrideForm
     fieldsets = (
         ("Who they are", {"fields": ("handle", "public_key", "fingerprint",
-                                     "email_verified")}),
+                                     "email_verified", "invite")}),
         ("Their quota", {
             "description": "The GROUP sets the limits for everyone in it. The "
                            "numbers below are ONLY for this person: empty "
@@ -168,7 +225,8 @@ class IdentityAdmin(UnfoldModelAdmin):
             "fields": ("tier", "ov_inbox_mb", "ov_envelopes", "ov_contacts",
                        "ov_sync_mb", "usage_view")}),
     )
-    readonly_fields = ("handle", "public_key", "fingerprint", "usage_view")
+    readonly_fields = ("handle", "public_key", "fingerprint", "invite",
+                       "usage_view")
 
     def usage_view(self, obj):
         from .quotas import effective_quota, current_usage

@@ -22,8 +22,9 @@ and one sealed snapshot per user: losing it is an outage, not a leak.
   **proof of private key**: the server seals a random nonce to the account's
   public key and only the holder of the private key can return it (the
   challenge lives 2 minutes). An account registered with a password can also
-  log in with handle and password. Sign-up is **invite-only by
-  default** (codes in the environment) or open, by the operator's choice.
+  log in with handle and password. Sign-up is **by invitation by
+  default**, closed or open, set in the admin: invitation codes with a note,
+  a number of uses and an optional expiry, each showing who signed up with it.
 - **Contacts and presence.** Contact requests, acceptance, per-contact
   permissions, removal. Presence is real: a contact is online while their
   WebSocket is open, not "seen in the last five minutes".
@@ -151,12 +152,12 @@ for clients on other machines add the name or address they use:
 runs its own server registers there. The client side is explained in
 [HOPLITA's federation guide](https://github.com/HoplitaAI/Hoplita/blob/main/docs/FEDERATION.md).
 
-Development sign-up is still invite-only unless you say otherwise:
+Development sign-up is still by invitation unless you say otherwise:
 
 ```bash
-HOPLITA_OPEN_REGISTRATION=1 PY=./venv/bin/python ./run.sh
+./venv/bin/python manage.py signup --new --uses 0   # prints a code
 # or
-HOPLITA_INVITE_CODES=let-me-in PY=./venv/bin/python ./run.sh
+./venv/bin/python manage.py signup --mode open
 ```
 
 ### Production-shaped, on your machine
@@ -214,17 +215,18 @@ half-finished machine finishes it. In order, it:
    database with a generated password;
 5. enables postfix;
 6. writes `/etc/hoplita-fed.env` from scratch — it carries over the existing
-   secret key, database password and invitation code (generating them on the
-   first run), and **everything else is set again to the script's values**:
-   4 workers, invite-only, and the mail settings from the `MAIL_*` variables
+   secret key and database password (generating them on the first run), and
+   **everything else is set again to the script's values**: 4 workers and the
+   mail settings from the `MAIL_*` variables
    (local postfix when they are not given). Pass the same variables on every
    run, and re-apply any setting you added by hand;
 7. installs and starts the systemd unit;
 8. writes `/etc/caddy/Caddyfile` for `DOMAIN` and `www.DOMAIN` (both names
    must resolve to the machine, for the certificates) and opens http/https in
    firewalld;
-9. runs the acceptance gate and, when it passes, prints the invitation code
-   (it is also in `HOPLITA_INVITE_CODES` in the env file).
+9. runs the acceptance gate and prints an invitation code: the first usable
+   one, minted if there is none (`manage.py signup --ensure`). Without it
+   nobody can create an account, you included.
 
 Other knobs: `ENVFILE` (default `/etc/hoplita-fed.env`), `PGDATA`, `DBNAME`
 (`hoplitafed`), `DBUSER` (`hoplita`).
@@ -268,9 +270,9 @@ sudo MAIL_HOST=smtp.provider.com MAIL_PORT=587 MAIL_TLS=1 \
    ```
 
    Fill in at least `HOPLITA_SECRET_KEY`, `HOPLITA_ALLOWED_HOSTS`,
-   `HOPLITA_CSRF_ORIGINS`, the `HOPLITA_DB_*` block, the mail block and either
-   `HOPLITA_INVITE_CODES` or `HOPLITA_OPEN_REGISTRATION=1` (see
-   [Configuration](#configuration)). Keep `127.0.0.1` and `localhost` in
+   `HOPLITA_CSRF_ORIGINS`, the `HOPLITA_DB_*` block, and the mail block (see
+   [Configuration](#configuration)). Sign-up is set once the service runs,
+   in the admin or with `manage.py signup` (see [The admin](#the-admin)). Keep `127.0.0.1` and `localhost` in
    `HOPLITA_ALLOWED_HOSTS`: the health probes and the acceptance gate talk to
    the application directly.
 
@@ -461,8 +463,6 @@ drops `LISTEN`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `HOPLITA_INVITE_CODES` | — | Comma-separated invitation codes. Invite-only with no code set means **nobody** can sign up. |
-| `HOPLITA_OPEN_REGISTRATION` | `0` | `1` lets anyone sign up. |
 | `HOPLITA_EXPOSE_DEV_PIN` | = `DEBUG` | Return the email PIN in the registration response (development only). |
 | `HOPLITA_EMAIL_HOST` | — | SMTP server; unset prints mail to the log instead of sending it. |
 | `HOPLITA_EMAIL_PORT` | 25 | |
@@ -470,9 +470,11 @@ drops `LISTEN`.
 | `HOPLITA_EMAIL_USER` / `_PASSWORD` | — | |
 | `HOPLITA_EMAIL_FROM` | `no-reply@localhost` | Sender address of the PIN mail. |
 
-A client enters an invitation code when it registers (the `invite` argument of
-`fed_register`). Codes are not used up: anyone holding one can sign up until
-it is removed from the list.
+Who may sign up is not in the environment: it is set in the admin (see
+[The admin](#the-admin)). Servers that had `HOPLITA_INVITE_CODES` or
+`HOPLITA_OPEN_REGISTRATION` in their env file get them brought into the
+database once, by a migration; after that the lines do nothing, the start-up
+check warns about them and the acceptance gate fails until they are removed.
 
 ---
 
@@ -501,6 +503,14 @@ it is removed from the list.
   The mail limits count what a user has *sent* that is still waiting to be
   collected, so nobody can fill somebody else's mailbox to cut them off.
 - **Contacts, envelopes, public folders** — for inspection.
+- **Sign-up policy**: closed, by invitation (the default) or open. By
+  invitation with no usable code, nobody can sign up; the page says so.
+- **Invitation codes**: one per person or group, with a note saying who it is
+  for, how many accounts it can create (0 = no limit), an optional expiry and
+  an off switch. Each code lists who signed up with it, and each user shows
+  their code. Withdrawing a code stops new sign-ups with it; the accounts stay.
+  A client enters the code when it registers (the `invite` argument of
+  `fed_register`).
 - **Banned emails**: addresses that cannot register; an action deactivates the
   accounts already using them.
 
@@ -511,6 +521,7 @@ Run them with the environment loaded (see above).
 | Command | What it does |
 |---|---|
 | `add_admin <user> [--email] [--password] [--rotate]` | Creates or refreshes an admin account with its TOTP device and prints the `otpauth://` URL. |
+| `signup [--mode closed\|invite\|open] [--new [--note] [--uses N]] [--ensure]` | Shows the sign-up mode and every invitation code with its state; sets the mode; mints a code (printed alone on the last line). `--ensure` prints a usable code, minting one only if none exists. |
 | `fed_smoke --url <url> [--rounds N] [--keep]` (or `HOPLITA_SMOKE_URL`) | End-to-end check of a running server: distinct worker PIDs, WebSocket events across workers, a shared rate limit. Exits non-zero with the reason. |
 | `sweep_mail [--days N] [--dry-run]` | Deletes undelivered mail older than the TTL and says how much it freed. Suitable for cron; it also runs at every start. |
 | `boot_sweep` | Clears presence left by the previous run and sweeps stale mail. The unit runs it once before the workers start. |
@@ -573,7 +584,8 @@ withdraw operations are REST only. A socket whose token stops being valid is
 closed with code 4401.
 
 Errors carry an `error` field: a machine code for the cases the client
-translates (`quota_exceeded`, `registration_closed`, `version_conflict`, …),
+translates (`quota_exceeded`, `registration_closed`, `invite_required`, `invite_spent`,
+`version_conflict`, …),
 otherwise a short English sentence. Statuses worth knowing:
 
 | Status | When |

@@ -63,6 +63,8 @@ class Identity(models.Model):
     last_seen = models.DateTimeField(null=True, blank=True)
     ws_online = models.BooleanField(default=False)
     ws_conns = models.IntegerField(default=0)
+    invite = models.ForeignKey("InviteCode", on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name="identities")
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property
@@ -216,6 +218,85 @@ class BannedEmail(models.Model):
 
     def __str__(self):
         return f"banned {self.email}" + (f" ({self.reason})" if self.reason else "")
+
+
+class RegistrationPolicy(models.Model):
+    CLOSED = "closed"; INVITE = "invite"; OPEN = "open"
+    MODE_CHOICES = [
+        (CLOSED, "Closed — nobody can sign up"),
+        (INVITE, "Invitation — only with a usable code"),
+        (OPEN, "Open — anyone can sign up"),
+    ]
+    mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=INVITE,
+        help_text="Open on a public domain means anyone who finds it creates "
+                  "identities and spends quota. It also needs working mail: "
+                  "the verification PIN goes by email.")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "sign-up policy"
+        verbose_name_plural = "🚪 Sign-up policy"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def current(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    def __str__(self):
+        return dict(self.MODE_CHOICES)[self.mode]
+
+
+def _new_invite_code():
+    return secrets.token_urlsafe(12)
+
+
+class InviteCode(models.Model):
+    code = models.CharField(max_length=64, unique=True, default=_new_invite_code,
+        help_text="What the person types. A random one is proposed; any text works.")
+    note = models.CharField(max_length=200, blank=True,
+        help_text="Who it is for, so you recognise it later.")
+    max_uses = models.PositiveIntegerField(default=1,
+        help_text="How many accounts it can create. 0 = unlimited.")
+    uses = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(null=True, blank=True,
+        help_text="Optional: after this instant it no longer works.")
+    active = models.BooleanField(default=True,
+        help_text="Untick to withdraw it. Accounts already created stay.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "invitation code"
+        verbose_name_plural = "🎟 Invitation codes"
+
+    @property
+    def state(self):
+        if not self.active:
+            return "withdrawn"
+        if self.expires_at and timezone.now() >= self.expires_at:
+            return "expired"
+        if self.max_uses and self.uses >= self.max_uses:
+            return "used up"
+        return "usable"
+
+    @classmethod
+    def usable(cls):
+        now = timezone.now()
+        return (cls.objects.filter(active=True)
+                .filter(models.Q(expires_at__isnull=True)
+                        | models.Q(expires_at__gt=now))
+                .filter(models.Q(max_uses=0)
+                        | models.Q(uses__lt=models.F("max_uses"))))
+
+    def spend(self):
+        return bool(InviteCode.usable().filter(pk=self.pk)
+                    .update(uses=models.F("uses") + 1))
+
+    def __str__(self):
+        return f"{self.code} ({self.note or 'no note'}) [{self.state}]"
 
 
 class SpawnToken(models.Model):

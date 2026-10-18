@@ -1,12 +1,11 @@
 
 import logging
-import os
 import secrets
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
@@ -38,7 +37,8 @@ def _send_pin(to_email, handle, pin):
         return False
 
 from .models import (Identity, EmailPin, Contact, Envelope,
-                     SpawnToken, LoginChallenge, QuotaTier)
+                     SpawnToken, LoginChallenge, QuotaTier, RegistrationPolicy,
+                     InviteCode)
 from . import services
 from .push import notify_user, reset_live
 
@@ -55,19 +55,28 @@ def register(request):
                          "message": "This email is banned on this server."},
                         status=403)
 
-    if not getattr(settings, "FED_OPEN_REGISTRATION", False):
-        codes = [c.strip() for c in
-                 os.environ.get("HOPLITA_INVITE_CODES", "").split(",") if c.strip()]
-        if not codes:
-            return Response(
-                {"error": "registration_closed",
-                 "message": "This server is not accepting new accounts."}, status=403)
+    mode = RegistrationPolicy.current().mode
+    invite = None
+    if mode == RegistrationPolicy.CLOSED:
+        return Response(
+            {"error": "registration_closed",
+             "message": "This server is not accepting new accounts."}, status=403)
+    if mode == RegistrationPolicy.INVITE:
         given = str(data.get("invite") or "").strip()
-        if not any(secrets.compare_digest(given, c) for c in codes):
+        for c in InviteCode.objects.all():
+            if given and secrets.compare_digest(given, c.code):
+                invite = c
+        if invite is None:
             return Response(
                 {"error": "invite_required",
                  "message": "You need an invitation code to register on this "
                             "server."}, status=403)
+        if invite.state != "usable":
+            return Response(
+                {"error": "invite_spent", "state": invite.state,
+                 "message": f"That invitation code is {invite.state}. Ask the "
+                            f"person who gave it to you for a new one."},
+                status=403)
 
     required = ["handle", "email", "public_key"]
     missing = [f for f in required if not data.get(f)]
@@ -81,23 +90,31 @@ def register(request):
         return Response({"error": "That user already exists"}, status=409)
 
     try:
-        user = User.objects.create_user(username=handle, email=data["email"])
-        pwd = data.get("password")
-        if pwd:
-            user.set_password(pwd)
-        else:
-            user.set_unusable_password()
-        user.save()
+        with transaction.atomic():
+            if invite is not None and not invite.spend():
+                return Response(
+                    {"error": "invite_spent", "state": "used up",
+                     "message": "That invitation code is used up. Ask the "
+                                "person who gave it to you for a new one."},
+                    status=403)
+            user = User.objects.create_user(username=handle, email=data["email"])
+            pwd = data.get("password")
+            if pwd:
+                user.set_password(pwd)
+            else:
+                user.set_unusable_password()
+            user.save()
+            Identity.objects.create(
+                user=user, handle=handle,
+                public_key=data["public_key"],
+                sign_pub=str(data.get("sign_pub") or "")[:128],
+                fingerprint=data.get("fingerprint", ""),
+                tier=QuotaTier.get_default(),
+                invite=invite,
+            )
     except IntegrityError:
         return Response({"error": "Could not create the user"}, status=409)
 
-    Identity.objects.create(
-        user=user, handle=handle,
-        public_key=data["public_key"],
-        sign_pub=str(data.get("sign_pub") or "")[:128],
-        fingerprint=data.get("fingerprint", ""),
-        tier=QuotaTier.get_default(),
-    )
     pin_obj = EmailPin.objects.create(user=user, pin=EmailPin.generate_pin())
 
     email_sent = _send_pin(user.email, handle, pin_obj.pin)

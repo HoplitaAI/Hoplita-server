@@ -17,8 +17,7 @@ MAIL_USER=${MAIL_USER:-}
 MAIL_PASS=${MAIL_PASS:-}
 MAIL_FROM=${MAIL_FROM:-no-reply@$DOMAIN}
 
-INVITE=$(sed -n 's/^HOPLITA_INVITE_CODES=//p' "$ENVFILE" 2>/dev/null | head -1)
-[ -n "$INVITE" ] || INVITE=$(python3 -c 'import secrets;print(secrets.token_urlsafe(12))')
+OLDSIGNUP=$(grep -E '^HOPLITA_(INVITE_CODES|OPEN_REGISTRATION)=' "$ENVFILE" 2>/dev/null || true)
 
 step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 
@@ -107,7 +106,7 @@ HOPLITA_EMAIL_USE_TLS=$MAIL_TLS
 HOPLITA_EMAIL_USER=$MAIL_USER
 HOPLITA_EMAIL_PASSWORD=$MAIL_PASS
 HOPLITA_EMAIL_FROM=$MAIL_FROM
-HOPLITA_INVITE_CODES=$INVITE
+$OLDSIGNUP
 EOF
 chmod 600 "$ENVFILE"
 umask 022
@@ -136,9 +135,18 @@ sleep 5   # gunicorn runs migrations in ExecStartPre before it binds
 PREFIX="$PREFIX" ENVFILE="$ENVFILE" DOMAIN="$DOMAIN" "$PREFIX/deploy/accept.sh"
 rc=$?
 
-printf '\n\033[1mINVITATION CODE: %s\033[0m\n' "$INVITE"
-printf 'Registration is invite-only. This is the code, and without it nobody\n'
-printf 'can create an account on this server — you included. Rotate it by\n'
-printf 'editing HOPLITA_INVITE_CODES in %s (comma-separated) and\n' "$ENVFILE"
-printf 'restarting hoplita-fed.\n'
+mapfile -t envargs < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENVFILE")
+INVITE=$(cd "$PREFIX" && sudo -u hoplita env "${envargs[@]}" \
+	"$PREFIX/venv/bin/python" "$PREFIX/manage.py" signup --ensure \
+	--note "first code, from the install" 2>/dev/null | tail -1) || INVITE=""
+if [ -n "$INVITE" ]; then
+	printf '\n\033[1mINVITATION CODE: %s\033[0m\n' "$INVITE"
+	printf 'Registration is by invitation. This is the code, and without it nobody\n'
+	printf 'can create an account on this server — you included. Mint more, set\n'
+	printf 'their uses or withdraw them in the admin (Invitation codes), or with\n'
+	printf '`manage.py signup`.\n'
+else
+	printf '\n\033[1mNo invitation code could be minted\033[0m (is the service up?).\n'
+	printf 'Once it runs: manage.py signup --ensure\n'
+fi
 exit $rc

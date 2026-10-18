@@ -114,6 +114,25 @@ else
 	bad "migrations pending: run manage.py migrate"
 fi
 
+head_ "7c. someone can sign up"
+if grep -qE '^HOPLITA_(INVITE_CODES|OPEN_REGISTRATION)=.' "$ENVFILE" 2>/dev/null; then
+	bad "HOPLITA_INVITE_CODES / HOPLITA_OPEN_REGISTRATION in $ENVFILE do nothing now (sign-up is set in the admin): remove the line(s)"
+fi
+if [ -x "$PREFIX/venv/bin/python" ] && signup=$(as_hoplita "$PREFIX/venv/bin/python" \
+	"$PREFIX/manage.py" signup 2>/dev/null); then
+	mode=$(head -1 <<<"$signup")
+	usable=$(grep -cE '^  [^ ]+ +usable ' <<<"$signup" || true)
+	case "$mode" in
+	*Invitation*)
+		[ "$usable" -gt 0 ] && ok "by invitation, $usable usable code(s)" \
+			|| bad "by invitation with NO usable code: nobody can sign up — add one in the admin or run manage.py signup --new" ;;
+	*Open*) ok "OPEN: anyone can sign up (set in the admin)" ;;
+	*) ok "closed: nobody can sign up (set in the admin)" ;;
+	esac
+else
+	bad "could not read the sign-up policy (manage.py signup)"
+fi
+
 head_ "8. mail actually goes out"
 mailhost=$(grep -oP '^HOPLITA_EMAIL_HOST=\K\S+' "$ENVFILE" 2>/dev/null || true)
 if [ -z "$mailhost" ]; then
