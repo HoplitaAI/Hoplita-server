@@ -8,7 +8,7 @@ from django.utils import timezone
 class QuotaTier(models.Model):
     class Meta:
         verbose_name = "group quota"
-        verbose_name_plural = "📦 Quotas by group"
+        verbose_name_plural = "Quotas by group"
 
     name = models.CharField(max_length=40, unique=True, db_index=True)
     max_sync_bytes = models.BigIntegerField(default=0, help_text="Max size of the sync snapshot (0=unlimited)")
@@ -40,13 +40,13 @@ class QuotaTier(models.Model):
         return {f: getattr(self, f) for f in self.FIELDS}
 
     def __str__(self):
-        return f"QuotaTier({self.name})"
+        return self.name
 
 
 class Identity(models.Model):
     class Meta:
         verbose_name = "user (federated identity)"
-        verbose_name_plural = "👤 Users and their quotas"
+        verbose_name_plural = "Users and their quotas"
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="identity")
     handle = models.CharField(max_length=255, unique=True, db_index=True)
@@ -235,7 +235,7 @@ class RegistrationPolicy(models.Model):
 
     class Meta:
         verbose_name = "sign-up policy"
-        verbose_name_plural = "🚪 Sign-up policy"
+        verbose_name_plural = "Sign-up policy"
 
     def save(self, *args, **kwargs):
         self.pk = 1
@@ -270,7 +270,7 @@ class InviteCode(models.Model):
     class Meta:
         ordering = ["-created_at"]
         verbose_name = "invitation code"
-        verbose_name_plural = "🎟 Invitation codes"
+        verbose_name_plural = "Invitation codes"
 
     @property
     def state(self):
@@ -379,7 +379,7 @@ class ServerNotice(models.Model):
     class Meta:
         ordering = ["-created_at"]
         verbose_name = "MOTD / server notice"
-        verbose_name_plural = "📢 MOTD and notices"
+        verbose_name_plural = "MOTD and notices"
 
     def as_payload(self):
         return {"id": self.id, "kind": self.kind, "level": self.level,

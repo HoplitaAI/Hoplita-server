@@ -269,12 +269,25 @@ LOGGING = {
 }
 
 
+from django.templatetags.static import static
+
 UNFOLD = {
     "SITE_TITLE": "HOPLITA FED",
-    "SITE_HEADER": "HOPLITA · federation",
-    "SITE_SYMBOL": "hub",
+    "SITE_HEADER": "HOPLITA",
+    "SITE_SUBHEADER": "federation server",
+    "SITE_ICON": lambda request: static("hoplita-admin/logo.png"),
+    "SITE_FAVICONS": [{"rel": "icon", "sizes": "any", "type": "image/png",
+                       "href": lambda request: static("hoplita-admin/logo.png")}],
     "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": False,
+    "DASHBOARD_CALLBACK": "federation.dashboard.dashboard_callback",
     "COLORS": {
+        "base": {
+            "50": "248 250 252", "100": "241 245 249", "200": "226 232 240",
+            "300": "203 213 225", "400": "148 163 184", "500": "100 116 139",
+            "600": "71 85 105", "700": "51 65 85", "800": "30 41 59",
+            "900": "15 23 42", "950": "2 6 23",
+        },
         "primary": {
             "50": "236 253 245", "100": "209 250 229", "200": "167 243 208",
             "300": "110 231 183", "400": "52 211 153", "500": "16 185 129",
@@ -288,10 +301,21 @@ UNFOLD = {
             {
                 "title": "Operation",
                 "items": [
-                    {"title": "Statistics", "icon": "monitoring",
-                     "link": "/admin/stats/"},
+                    {"title": "Dashboard", "icon": "space_dashboard",
+                     "link": "/admin/"},
                     {"title": "MOTD and notices", "icon": "campaign",
                      "link": "/admin/federation/servernotice/"},
+                ],
+            },
+            {
+                "title": "Sign-up",
+                "items": [
+                    {"title": "Who may sign up", "icon": "door_open",
+                     "link": "/admin/federation/registrationpolicy/"},
+                    {"title": "Invitation codes", "icon": "confirmation_number",
+                     "link": "/admin/federation/invitecode/"},
+                    {"title": "Banned emails", "icon": "block",
+                     "link": "/admin/federation/bannedemail/"},
                 ],
             },
             {
@@ -299,10 +323,12 @@ UNFOLD = {
                 "items": [
                     {"title": "Users (editable quota)", "icon": "person",
                      "link": "/admin/federation/identity/"},
-                    {"title": "Quota groups", "icon": "inventory",
+                    {"title": "Quota groups", "icon": "inventory_2",
                      "link": "/admin/federation/quotatier/"},
                     {"title": "Django accounts", "icon": "manage_accounts",
                      "link": "/admin/auth/user/"},
+                    {"title": "Admin authenticators", "icon": "key",
+                     "link": "/admin/otp_totp/totpdevice/"},
                 ],
             },
             {
@@ -314,8 +340,10 @@ UNFOLD = {
                      "link": "/admin/federation/envelope/"},
                     {"title": "Public folders", "icon": "folder_shared",
                      "link": "/admin/federation/publicfolder/"},
-                    {"title": "Banned emails", "icon": "block",
-                     "link": "/admin/federation/bannedemail/"},
+                    {"title": "Encrypted snapshots", "icon": "cloud_sync",
+                     "link": "/admin/federation/syncsnapshot/"},
+                    {"title": "Child enrolment tokens", "icon": "child_care",
+                     "link": "/admin/federation/spawntoken/"},
                 ],
             },
         ],

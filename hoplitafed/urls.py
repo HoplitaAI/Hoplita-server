@@ -1,34 +1,9 @@
 from django.contrib import admin
 from django.urls import path, include
-from django_otp.admin import OTPAdminSite
-from unfold.sites import UnfoldAdminSite
 
-class _HoplitaAdmin(OTPAdminSite, UnfoldAdminSite):
+from .admin_site import install
 
-
-    def get_app_list(self, request, app_label=None):
-        apps = super().get_app_list(request, app_label)
-        if app_label:
-            return apps
-        return apps + [{
-            "name": "📊 Operation",
-            "app_label": "operacion",
-            "app_url": "/admin/stats/",
-            "has_module_perms": True,
-            "models": [{
-                "name": "Server statistics",
-                "object_name": "stats",
-                "admin_url": "/admin/stats/",
-                "add_url": None,
-                "view_only": True,
-                "perms": {"add": False, "change": False,
-                          "delete": False, "view": True},
-            }],
-        }]
-
-
-admin.site.__class__ = _HoplitaAdmin
-admin.site.login_form = OTPAdminSite.login_form
+install()
 
 from federation.admin import stats_view
 from federation.views_health import health

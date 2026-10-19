@@ -55,7 +55,7 @@ and one sealed snapshot per user: losing it is an outage, not a leak.
 - **Quotas.** Per-group limits — snapshot size, undelivered mail (count and
   bytes), contacts, children, API requests per minute — with per-user
   overrides. `0` means unlimited.
-- **Operator tools.** An admin behind TOTP with a statistics page, a MOTD and
+- **Operator tools.** An admin behind TOTP with a dashboard, a MOTD and
   server notices (broadcast or to one user), quota groups, banned emails, and
   a `/health` endpoint for probes.
 
@@ -482,10 +482,28 @@ check warns about them and the acceptance gate fails until they are removed.
 
 ### The admin
 
-`/admin/`, behind username, password and a TOTP code. From the sidebar:
+`/admin/`, one sign-in page with username, password and the six digits of
+the authenticator app (pasted as the app shows them, with or without the
+space). After a wrong code the page says how many seconds to wait before the
+next try; a code that already opened the door once is named as used.
 
-- **Statistics** (`/admin/stats/`): users alive, asleep and gone, mail in
-  flight, and 14 days of activity.
+The front page is the **dashboard**:
+
+- Accounts (and how many joined this week), active this week, connected now,
+  envelopes waiting and how old the oldest is, and who may sign up.
+- **Needs a look**: sign-up by invitation with no usable code, envelopes
+  nobody has collected for more than 7 days, users at 80 % or more of their
+  sending quota, invitation codes expiring within 7 days, and accounts that
+  signed up and never did anything. When none applies it says so.
+- Envelopes per day and by hour over 14 days, what kind of envelopes travel,
+  the newest accounts with the code they came in with, the fullest mailboxes,
+  the notices being served, the federation protocol served and the size of
+  the database.
+
+It follows the admin's light or dark theme. `/admin/stats/` leads to it.
+
+From the sidebar:
+
 - **MOTD and notices**: a message of the day for everyone, or a notice to one
   user, with a level and an optional expiry. Clients show it in their own
   language when it carries a machine code.
