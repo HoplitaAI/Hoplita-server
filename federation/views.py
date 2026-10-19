@@ -152,7 +152,18 @@ def verify_email(request):
     if not pin_obj:
         return Response({"error": "Wrong PIN"}, status=400)
     if pin_obj.is_expired:
-        return Response({"error": "PIN expired"}, status=400)
+        newest = (EmailPin.objects.filter(user=identity.user)
+                  .order_by("-created_at").first())
+        resent = False
+        if newest is None or (timezone.now() - newest.created_at).total_seconds() >= 60:
+            fresh = EmailPin.objects.create(user=identity.user, pin=EmailPin.generate_pin())
+            resent = _send_pin(identity.user.email, identity.handle, fresh.pin)
+        return Response({"error": "PIN expired", "resent": resent,
+                         "message": ("That code expired. A new one was sent to "
+                                     "the same email." if resent else
+                                     "That code expired. Wait a minute and try "
+                                     "again: a new one will be sent.")},
+                        status=400)
 
     EmailPin.objects.filter(user=identity.user).delete()
     identity.email_verified = True
