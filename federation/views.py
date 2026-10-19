@@ -149,22 +149,34 @@ def verify_email(request):
 
     pin_obj = (EmailPin.objects.filter(user=identity.user, pin=pin, used=False)
                .order_by("-created_at").first())
-    if not pin_obj:
+    if pin_obj and not pin_obj.is_expired:
+        return _verified(identity)
+    from datetime import timedelta
+    ttl = timezone.now() - timedelta(minutes=EmailPin.PIN_TTL_MINUTES)
+    live = EmailPin.objects.filter(user=identity.user, created_at__gte=ttl)
+    if identity.email_verified or live.exists():
         return Response({"error": "Wrong PIN"}, status=400)
-    if pin_obj.is_expired:
-        newest = (EmailPin.objects.filter(user=identity.user)
-                  .order_by("-created_at").first())
-        resent = False
-        if newest is None or (timezone.now() - newest.created_at).total_seconds() >= 60:
-            fresh = EmailPin.objects.create(user=identity.user, pin=EmailPin.generate_pin())
-            resent = _send_pin(identity.user.email, identity.handle, fresh.pin)
-        return Response({"error": "PIN expired", "resent": resent,
-                         "message": ("That code expired. A new one was sent to "
-                                     "the same email." if resent else
-                                     "That code expired. Wait a minute and try "
-                                     "again: a new one will be sent.")},
-                        status=400)
+    from django.core.cache import cache
+    key = f"pin-resend:{identity.pk}"
+    sent_lately = cache.get(key) or []
+    import time
+    now = time.time()
+    sent_lately = [t for t in sent_lately if now - t < 3600]
+    resent = False
+    if len(sent_lately) < 5 and (not sent_lately or now - sent_lately[-1] >= 60):
+        fresh = EmailPin.objects.create(user=identity.user, pin=EmailPin.generate_pin())
+        resent = _send_pin(identity.user.email, identity.handle, fresh.pin)
+        sent_lately.append(now)
+        cache.set(key, sent_lately, 3600)
+    return Response({"error": "PIN expired", "resent": resent,
+                     "message": ("That code expired. A new one was sent to the "
+                                 "same email." if resent else
+                                 "That code expired. Wait a minute and try "
+                                 "again: a new one will be sent.")},
+                    status=400)
 
+
+def _verified(identity):
     EmailPin.objects.filter(user=identity.user).delete()
     identity.email_verified = True
     identity.save(update_fields=["email_verified"])
