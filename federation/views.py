@@ -4,7 +4,6 @@ import secrets
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -20,16 +19,37 @@ def _send_pin(to_email, handle, pin):
     if not to_email:
         return False
     try:
-        sent = send_mail(
-            subject=f"HOPLITA — verification code for {handle}",
-            message=(f"Your code is {pin}\n\n"
-                     f"It expires in {EmailPin.PIN_TTL_MINUTES} minutes. "
-                     f"If you did not ask for it, ignore this message: without "
-                     f"the code nothing was activated."),
-            from_email=None,
-            recipient_list=[to_email],
-            fail_silently=False,
-        )
+        from html import escape
+        from django.core.mail import EmailMultiAlternatives
+        from django.core.mail.message import make_msgid
+        sender = settings.DEFAULT_FROM_EMAIL
+        domain = sender.rsplit("@", 1)[-1] if "@" in sender else None
+        server = domain or ""
+        ttl = EmailPin.PIN_TTL_MINUTES
+        text = (f"Your HOPLITA verification code is:\n\n    {pin}\n\n"
+                f"It is for the account '{handle}' on the server {server}, and it "
+                f"expires in {ttl} minutes.\n\n"
+                f"If you did not sign up, ignore this message: without the code "
+                f"nothing is activated.\n")
+        html = (
+            '<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,'
+            'sans-serif;max-width:480px;margin:0 auto;color:#0f172a">'
+            '<p style="font-size:15px">Your HOPLITA verification code is:</p>'
+            f'<p style="font-size:32px;font-weight:700;letter-spacing:6px;'
+            f'font-family:Menlo,Consolas,monospace;margin:18px 0">{escape(pin)}</p>'
+            f'<p style="font-size:14px">It is for the account <b>{escape(handle)}</b> '
+            f'on the server <b>{escape(server)}</b>, and it expires in {ttl} '
+            'minutes.</p>'
+            '<p style="font-size:13px;color:#475569">If you did not sign up, '
+            'ignore this message: without the code nothing is activated.</p>'
+            '</div>')
+        msg = EmailMultiAlternatives(
+            subject=f"{pin} is your HOPLITA verification code",
+            body=text, from_email=sender, to=[to_email],
+            headers={"Message-ID": make_msgid(domain=domain),
+                     "Auto-Submitted": "auto-generated"})
+        msg.attach_alternative(html, "text/html")
+        sent = msg.send(fail_silently=False)
         return bool(sent)
     except Exception as e:
         _log.error("could not send the verification email to %s: %s",
