@@ -58,9 +58,10 @@ def set_online(identity, online):
 
 
 def contact_ids_of(identity):
-    ids = set(Contact.objects.filter(owner=identity)
+    acc = Contact.ACCEPTED
+    ids = set(Contact.objects.filter(owner=identity, status=acc)
               .values_list("peer_id", flat=True))
-    ids |= set(Contact.objects.filter(peer=identity)
+    ids |= set(Contact.objects.filter(peer=identity, status=acc)
                .values_list("owner_id", flat=True))
     ids.discard(identity.id)
     return ids
@@ -74,7 +75,7 @@ def svc_list_contacts(me, params=None):
             "handle": c.peer.handle,
             "status": c.status,
             "trust_level": c.trust_level,
-            "online": c.peer.is_online,
+            "online": c.peer.is_online if c.status == Contact.ACCEPTED else False,
             "fingerprint": c.peer.fingerprint,
             "permissions": c.permissions,
             "attestation": c.attestation,
