@@ -265,8 +265,8 @@ def svc_send_envelope(me, params):
     except Identity.DoesNotExist:
         return {"error": "Recipient not found"}, 404
 
-    if not Contact.objects.filter(owner=me, peer=recipient,
-                                  status=Contact.ACCEPTED).exists():
+    if recipient.id != me.id and not Contact.objects.filter(
+            owner=me, peer=recipient, status=Contact.ACCEPTED).exists():
         _serves = SharedFolder.objects.filter(
             owner=me, peer=recipient, readonly=True,
             status=SharedFolder.ACCEPTED).exists()
