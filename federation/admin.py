@@ -20,6 +20,15 @@ from .models import (Identity, EmailPin, Contact, Envelope, SpawnToken,
 from .dashboard import BUCKET_LABEL, ago, bucket, human_bytes
 
 
+class ShownNotMade:
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(BannedEmail)
 class BannedEmailAdmin(UnfoldModelAdmin):
     list_display = ("email", "reason", "created_at")
@@ -102,13 +111,16 @@ class InviteCodeAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PublicFolder)
-class PublicFolderAdmin(UnfoldModelAdmin):
+class PublicFolderAdmin(ShownNotMade, UnfoldModelAdmin):
     list_display = ("folder_name", "owner", "kind", "subs", "created_at")
     search_fields = ("folder_name", "owner__handle")
 
     def subs(self, obj):
         return obj.subscriber_count()
     subs.short_description = "subscribers"
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(QuotaTier)
@@ -284,6 +296,9 @@ class IdentityAdmin(UnfoldModelAdmin):
     def usage_view(self, obj):
         return usage_meters(obj)
 
+    def has_add_permission(self, request):
+        return False
+
 class IdentityInline(UnfoldStackedInline):
     model = Identity
     can_delete = False
@@ -293,6 +308,9 @@ class IdentityInline(UnfoldStackedInline):
               "ov_sync_mb", "usage")
     readonly_fields = ("handle", "usage")
     verbose_name_plural = "📦 Quota and group (federated identity)"
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
     @admin.display(description="Current usage / limit")
     def usage(self, obj):
@@ -318,15 +336,20 @@ admin.site.register(User, UserWithQuotaAdmin)
 
 
 @admin.register(EmailPin)
-class EmailPinAdmin(UnfoldModelAdmin):
-    list_display = ("user", "pin", "used", "created_at")
+class EmailPinAdmin(ShownNotMade, UnfoldModelAdmin):
+    list_display = ("user", "used", "created_at")
+    exclude = ("pin",)
 
 @admin.register(Contact)
-class ContactAdmin(UnfoldModelAdmin):
+class ContactAdmin(ShownNotMade, UnfoldModelAdmin):
     list_display = ("owner", "peer", "status", "trust_level")
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Envelope)
-class EnvelopeAdmin(UnfoldModelAdmin):
+class EnvelopeAdmin(ShownNotMade, UnfoldModelAdmin):
     list_display = ("resource_type", "sender_h", "recipient_h", "delivered",
                     "size", "created_at")
     list_filter = ("resource_type", "delivered")
@@ -352,18 +375,21 @@ class EnvelopeAdmin(UnfoldModelAdmin):
 
 
 @admin.register(SpawnToken)
-class SpawnTokenAdmin(UnfoldModelAdmin):
+class SpawnTokenAdmin(ShownNotMade, UnfoldModelAdmin):
     list_display = ("owner", "label", "redeemed", "child", "expires_at", "created_at")
     list_filter = ("redeemed",)
     readonly_fields = ("token_hash", "created_at", "redeemed_at")
 
 
 @admin.register(SyncSnapshot)
-class SyncSnapshotAdmin(UnfoldModelAdmin):
+class SyncSnapshotAdmin(ShownNotMade, UnfoldModelAdmin):
     list_display = ("owner", "version", "size", "updated_at")
     list_select_related = ("owner",)
     exclude = ("ciphertext",)
     readonly_fields = ("owner", "version", "size", "updated_at")
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     def get_queryset(self, request):
         return super().get_queryset(request).defer("ciphertext")
