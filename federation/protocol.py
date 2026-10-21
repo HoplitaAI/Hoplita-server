@@ -1,7 +1,7 @@
 
 import os
 
-PROTO = 2
+PROTO = 3
 
 
 def _min_proto():
