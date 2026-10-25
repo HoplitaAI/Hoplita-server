@@ -1,11 +1,14 @@
 
 import base64
+import hashlib
 import os
 
 from django.http import HttpResponse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PAGE = None
+_ASSETS = os.path.join(os.path.dirname(_HERE), "federation", "static", "landing")
+_VERSIONED = ("landing.css", "landing.js")
 
 
 def _logo_data_uri():
@@ -30,10 +33,21 @@ def _fallback():
             "github.com/HoplitaAI/Hoplita</a></p></main></body></html>")
 
 
+def _versioned(page):
+    for name in _VERSIONED:
+        try:
+            with open(os.path.join(_ASSETS, name), "rb") as fh:
+                v = hashlib.sha256(fh.read()).hexdigest()[:10]
+        except Exception:
+            continue
+        page = page.replace(f'/static/landing/{name}"', f'/static/landing/{name}?v={v}"')
+    return page
+
+
 def _load():
     try:
         with open(os.path.join(_HERE, "landing.html"), encoding="utf-8") as fh:
-            return fh.read()
+            return _versioned(fh.read())
     except Exception:
         return _fallback()
 
@@ -43,7 +57,7 @@ def home(request):
     if _PAGE is None:
         _PAGE = _load()
     r = HttpResponse(_PAGE, content_type="text/html; charset=utf-8")
-    r["Cache-Control"] = "public, max-age=3600"
+    r["Cache-Control"] = "no-cache"
     return r
 
 
