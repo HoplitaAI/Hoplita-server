@@ -12,7 +12,7 @@ def _min_proto():
 
 
 MIN_PROTO = _min_proto()
-CAPS = ("live",)
+CAPS = ("live", "sync_parts", "spawn_kit")
 
 LIVE_MAX_BYTES = 6000
 
@@ -23,8 +23,10 @@ LIVE_PEER_TTL_S = 60
 
 
 def hello():
+    from .services import _max_body, sync_part_bytes
     return {"proto": PROTO, "min_proto": MIN_PROTO, "caps": list(CAPS),
-            "live_max_bytes": LIVE_MAX_BYTES}
+            "live_max_bytes": LIVE_MAX_BYTES, "max_body": _max_body(),
+            "sync_part_bytes": sync_part_bytes()}
 
 
 def client_proto(value):

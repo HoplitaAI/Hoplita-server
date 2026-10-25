@@ -452,6 +452,26 @@ def create_spawn_token(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def set_spawn_kit(request):
+    me = request.user.identity
+    kit = request.data.get("kit")
+    if not isinstance(kit, str) or len(kit) > SpawnToken.KIT_MAX_CHARS:
+        return Response({"error": "kit must be a string of at most "
+                                  f"{SpawnToken.KIT_MAX_CHARS} characters"},
+                        status=400)
+    try:
+        tok = SpawnToken.objects.get(id=request.data.get("spawn_id"), owner=me)
+    except (SpawnToken.DoesNotExist, ValueError, TypeError):
+        return Response({"error": "No such token"}, status=404)
+    if not tok.is_usable:
+        return Response({"error": "Token already used or expired"}, status=403)
+    tok.kit = kit
+    tok.save(update_fields=["kit"])
+    return Response({"ok": True})
+
+
+@api_view(["POST"])
 @permission_classes([AllowAny])
 def redeem_spawn_token(request):
     token_raw = request.data.get("token") or ""
@@ -490,10 +510,12 @@ def redeem_spawn_token(request):
         owner=child, peer=owner,
         defaults={"status": Contact.ACCEPTED, "trust_level": Contact.TRUST_OPEN})
 
+    kit = tok.kit
     tok.redeemed = True
     tok.redeemed_at = timezone.now()
     tok.child = child
-    tok.save(update_fields=["redeemed", "redeemed_at", "child"])
+    tok.kit = ""
+    tok.save(update_fields=["redeemed", "redeemed_at", "child", "kit"])
 
     child.touch()
     session_token, _ = Token.objects.get_or_create(user=user)
@@ -502,6 +524,7 @@ def redeem_spawn_token(request):
         "handle": handle,
         "token": session_token.key,
         "owner": owner.handle,
+        "kit": kit,
     }, status=201)
 
 
@@ -646,7 +669,37 @@ def list_folders(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def sync_pull(request):
-    payload, status = services.svc_sync_pull(request.user.identity, {})
+    payload, status = services.svc_sync_pull(request.user.identity,
+                                             request.query_params)
+    return Response(payload, status=status)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sync_pull_part(request):
+    payload, status = services.svc_sync_pull_part(request.user.identity,
+                                                  request.query_params)
+    return Response(payload, status=status)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sync_push_begin(request):
+    payload, status = services.svc_sync_push_begin(request.user.identity, request.data)
+    return Response(payload, status=status)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sync_push_part(request):
+    payload, status = services.svc_sync_push_part(request.user.identity, request.data)
+    return Response(payload, status=status)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sync_push_commit(request):
+    payload, status = services.svc_sync_push_commit(request.user.identity, request.data)
     return Response(payload, status=status)
 
 

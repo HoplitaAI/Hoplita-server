@@ -312,8 +312,10 @@ class SpawnToken(models.Model):
     redeemed_at = models.DateTimeField(null=True, blank=True)
     child = models.ForeignKey("Identity", on_delete=models.SET_NULL, null=True,
                               blank=True, related_name="spawned_from")
+    kit = models.TextField(blank=True, default="")
 
     TOKEN_TTL_MINUTES = 60
+    KIT_MAX_CHARS = 65536
 
     @staticmethod
     def hash_token(raw):
@@ -343,11 +345,37 @@ class SyncSnapshot(models.Model):
                                  related_name="sync_snapshot")
     version = models.IntegerField(default=0)
     ciphertext = models.TextField()
-    size = models.IntegerField(default=0)
+    size = models.BigIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
+    parts = models.IntegerField(default=0)
+    upload_id = models.CharField(max_length=32, blank=True, default="")
+    sha256 = models.CharField(max_length=64, blank=True, default="")
 
     def __str__(self):
         return f"SyncSnapshot({self.owner.handle}) v{self.version} ({self.size}B)"
+
+
+class SyncUpload(models.Model):
+    owner = models.ForeignKey(Identity, on_delete=models.CASCADE,
+                              related_name="sync_uploads")
+    upload_id = models.CharField(max_length=32, unique=True)
+    base_version = models.IntegerField(default=0)
+    parts = models.IntegerField()
+    size = models.BigIntegerField()
+    sha256 = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class SyncPart(models.Model):
+    owner = models.ForeignKey(Identity, on_delete=models.CASCADE,
+                              related_name="sync_parts")
+    upload_id = models.CharField(max_length=32, db_index=True)
+    idx = models.IntegerField()
+    data = models.TextField()
+    size = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = (("upload_id", "idx"),)
 
 
 class ServerNotice(models.Model):

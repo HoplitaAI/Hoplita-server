@@ -7,7 +7,8 @@ from datetime import timedelta
 from django.utils import timezone
 
 from .models import (Identity, Contact, Envelope, SharedFolder,
-                     SyncSnapshot, ServerNotice, PublicFolder, BannedEmail)
+                     SyncSnapshot, SyncUpload, SyncPart, ServerNotice,
+                     PublicFolder, BannedEmail)
 from . import quotas
 
 MAX_ENVELOPE_BYTES = int(os.environ.get("HOPLITA_MAX_ENVELOPE_BYTES") or 4_000_000)
@@ -704,8 +705,39 @@ def svc_sync_pull(me, params=None):
     snap = SyncSnapshot.objects.filter(owner=me).first()
     if snap is None:
         return {"version": 0, "ciphertext": None}, 200
-    return {"version": snap.version, "ciphertext": snap.ciphertext,
-            "size": snap.size, "updated_at": snap.updated_at.isoformat()}, 200
+    head = {"version": snap.version, "size": snap.size,
+            "updated_at": snap.updated_at.isoformat()}
+    if not snap.parts:
+        return dict(head, ciphertext=snap.ciphertext), 200
+    if _truthy((params or {}).get("parts")):
+        return dict(head, ciphertext=None, parts=snap.parts,
+                    sha256=snap.sha256), 200
+    if snap.size > _max_body():
+        return {"error": "snapshot_needs_parts",
+                "message": "This snapshot is too big to come down in one "
+                           "piece and this client cannot fetch it in parts: "
+                           "update HOPLITA to sync it."}, 409
+    blob = "".join(SyncPart.objects.filter(upload_id=snap.upload_id)
+                   .order_by("idx").values_list("data", flat=True))
+    return dict(head, ciphertext=blob), 200
+
+
+def svc_sync_pull_part(me, params):
+    params = params or {}
+    snap = SyncSnapshot.objects.filter(owner=me).first()
+    try:
+        idx = int(params.get("idx"))
+        version = int(params.get("version"))
+    except (TypeError, ValueError):
+        return {"error": "idx and version required"}, 400
+    if snap is None or not snap.parts:
+        return {"error": "no snapshot in parts"}, 404
+    if version != snap.version:
+        return {"error": "version_conflict", "server_version": snap.version}, 409
+    part = SyncPart.objects.filter(upload_id=snap.upload_id, idx=idx).first()
+    if part is None:
+        return {"error": f"no part {idx}"}, 404
+    return {"version": snap.version, "idx": idx, "data": part.data}, 200
 
 
 def svc_sync_push(me, params):
@@ -723,11 +755,157 @@ def svc_sync_push(me, params):
     new_version = cur + 1
     if snap is None:
         snap = SyncSnapshot(owner=me)
+    old_upload = snap.upload_id
     snap.version = new_version
     snap.ciphertext = ciphertext
     snap.size = len(ciphertext)
+    snap.parts, snap.upload_id, snap.sha256 = 0, "", ""
     snap.save()
+    if old_upload:
+        SyncPart.objects.filter(upload_id=old_upload).delete()
     return {"ok": True, "version": new_version}, 200
+
+
+def _max_body():
+    from django.conf import settings
+    return int(getattr(settings, "DATA_UPLOAD_MAX_MEMORY_SIZE", 0) or 2_621_440)
+
+
+def sync_part_bytes():
+    want = int(os.environ.get("HOPLITA_SYNC_PART_BYTES") or 8 * 1024 * 1024)
+    return max(64 * 1024, min(want, _max_body() * 3 // 4))
+
+
+SYNC_UPLOAD_TTL = timedelta(hours=6)
+SYNC_UPLOADS_IN_FLIGHT = 3
+
+
+def _truthy(v):
+    return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _drop_upload(up):
+    SyncPart.objects.filter(upload_id=up.upload_id).delete()
+    up.delete()
+
+
+def svc_sync_push_begin(me, params):
+    import secrets
+    params = params or {}
+    try:
+        parts = int(params.get("parts"))
+        size = int(params.get("size"))
+        base_version = int(params.get("base_version", 0) or 0)
+    except (TypeError, ValueError):
+        return {"error": "parts, size and base_version must be numbers"}, 400
+    sha = str(params.get("sha256") or "").lower()
+    if parts < 1 or size < 1 or len(sha) != 64:
+        return {"error": "parts, size and sha256 required"}, 400
+    if parts > size or size > parts * sync_part_bytes():
+        return {"error": f"{parts} parts cannot hold {size} bytes at "
+                         f"{sync_part_bytes()} per part"}, 400
+    err = quotas.check_quota(me, "sync_bytes", incoming=size)
+    if err:
+        return err
+    snap = SyncSnapshot.objects.filter(owner=me).first()
+    if snap is not None and base_version != snap.version:
+        return {"error": "version_conflict", "server_version": snap.version}, 409
+    for up in SyncUpload.objects.filter(
+            owner=me, created_at__lt=timezone.now() - SYNC_UPLOAD_TTL):
+        _drop_upload(up)
+    if SyncUpload.objects.filter(owner=me).count() >= SYNC_UPLOADS_IN_FLIGHT:
+        return {"error": "too_many_uploads",
+                "message": "Several uploads of your snapshot are already on "
+                           "their way; try again when they finish."}, 429
+    up = SyncUpload.objects.create(owner=me, upload_id=secrets.token_hex(16),
+                                   base_version=base_version, parts=parts,
+                                   size=size, sha256=sha)
+    return {"ok": True, "upload_id": up.upload_id,
+            "part_bytes": sync_part_bytes()}, 200
+
+
+def svc_sync_push_part(me, params):
+    params = params or {}
+    up = SyncUpload.objects.filter(owner=me,
+                                   upload_id=str(params.get("upload_id") or "")).first()
+    if up is None:
+        return {"error": "upload_unknown",
+                "message": "That upload is not open (finished, or swept)."}, 404
+    try:
+        idx = int(params.get("idx"))
+    except (TypeError, ValueError):
+        return {"error": "idx required"}, 400
+    data = params.get("data")
+    if not isinstance(data, str) or not data:
+        return {"error": "data required"}, 400
+    if not 0 <= idx < up.parts:
+        return {"error": f"part {idx} outside 0..{up.parts - 1}"}, 400
+    if len(data) > sync_part_bytes():
+        return {"error": f"part over {sync_part_bytes()} bytes"}, 413
+    others = (SyncPart.objects.filter(upload_id=up.upload_id)
+              .exclude(idx=idx).aggregate(n=Sum("size"))["n"] or 0)
+    if others + len(data) > up.size:
+        return {"error": "the parts are bigger than the size declared"}, 400
+    SyncPart.objects.update_or_create(
+        upload_id=up.upload_id, idx=idx,
+        defaults={"owner": me, "data": data, "size": len(data)})
+    return {"ok": True, "idx": idx}, 200
+
+
+def svc_sync_push_commit(me, params):
+    import hashlib
+    from django.db import IntegrityError, transaction
+    params = params or {}
+    up = SyncUpload.objects.filter(owner=me,
+                                   upload_id=str(params.get("upload_id") or "")).first()
+    if up is None:
+        return {"error": "upload_unknown",
+                "message": "That upload is not open (finished, or swept)."}, 404
+    qs = SyncPart.objects.filter(upload_id=up.upload_id)
+    have = qs.count()
+    total = qs.aggregate(n=Sum("size"))["n"] or 0
+    if have != up.parts or total != up.size:
+        return {"error": "upload_incomplete", "parts": have, "of": up.parts,
+                "size": total, "declared": up.size}, 400
+    h = hashlib.sha256()
+    for data in qs.order_by("idx").values_list("data", flat=True).iterator(chunk_size=1):
+        h.update(data.encode("utf-8"))
+    if h.hexdigest() != up.sha256:
+        _drop_upload(up)
+        return {"error": "hash_mismatch",
+                "message": "The parts that arrived are not the snapshot that "
+                           "was declared; nothing was changed."}, 400
+    err = quotas.check_quota(me, "sync_bytes", incoming=up.size)
+    if err:
+        _drop_upload(up)
+        return err
+    snap = SyncSnapshot.objects.filter(owner=me).first()
+    if snap is None:
+        try:
+            with transaction.atomic():
+                SyncSnapshot.objects.create(
+                    owner=me, version=1, ciphertext="", size=up.size,
+                    parts=up.parts, upload_id=up.upload_id, sha256=up.sha256)
+        except IntegrityError:
+            _drop_upload(up)
+            cur = SyncSnapshot.objects.filter(owner=me).values_list("version", flat=True).first()
+            return {"error": "version_conflict", "server_version": cur}, 409
+        up.delete()
+        return {"ok": True, "version": 1}, 200
+    if up.base_version != snap.version:
+        _drop_upload(up)
+        return {"error": "version_conflict", "server_version": snap.version}, 409
+    won = SyncSnapshot.objects.filter(owner=me, version=up.base_version).update(
+        version=up.base_version + 1, ciphertext="", size=up.size, parts=up.parts,
+        upload_id=up.upload_id, sha256=up.sha256, updated_at=timezone.now())
+    if not won:
+        _drop_upload(up)
+        cur = SyncSnapshot.objects.filter(owner=me).values_list("version", flat=True).first()
+        return {"error": "version_conflict", "server_version": cur}, 409
+    if snap.upload_id:
+        SyncPart.objects.filter(upload_id=snap.upload_id).delete()
+    up.delete()
+    return {"ok": True, "version": up.base_version + 1}, 200
 
 
 def svc_quota(me, params=None):
@@ -772,6 +950,10 @@ def svc_notices(me=None, params=None):
 WS_OPS = {
     "sync_pull": svc_sync_pull,
     "sync_push": svc_sync_push,
+    "sync_pull_part": svc_sync_pull_part,
+    "sync_push_begin": svc_sync_push_begin,
+    "sync_push_part": svc_sync_push_part,
+    "sync_push_commit": svc_sync_push_commit,
     "motd": svc_motd,
     "notices": svc_notices,
     "quota": svc_quota,
